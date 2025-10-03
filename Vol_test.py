@@ -14,7 +14,7 @@ import os
 import corner
 import jax
 
-RNG = np.random.default_rng(int(os.times()[4]))
+RNG = np.random.default_rng(2025)
 DRIFT_SCALE = 1
 
 def prior():
@@ -96,12 +96,12 @@ if __name__ == "__main__":
         standardize=None
     )
 
-    train = workflow.simulate(8000)
-    validation = workflow.simulate(300)
+    train = workflow.simulate(10000)
+    validation = workflow.simulate(500)
 
     history = workflow.fit_offline(data=train,
-                                   epochs=100,
-                                   batch_size=64,
+                                   epochs=300,
+                                   batch_size=32,
                                    validation_data=validation)
 
     f = bf.diagnostics.plots.loss(history)
