@@ -1,3 +1,9 @@
+"""
+Simulates a multivariable geometric brownian motion with 3 variables, and performs inference on
+the drift parameters, before outputting metrics for the posterior distributions.
+"""
+
+
 import os
 
 if "KERAS_BACKEND" not in os.environ:
@@ -15,7 +21,7 @@ import corner
 import jax
 
 RNG = np.random.default_rng(int(os.times()[4]))
-DRIFT_SCALE = 1
+DRIFT_SCALE = 0.4
 
 def prior():
     # Generates a random draw from the prior
@@ -52,8 +58,8 @@ class GRU(bf.networks.SummaryNetwork):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.gru = keras.layers.GRU(64, dropout=0.1)
-        self.summary_stats = keras.layers.Dense(16)
+        self.gru = keras.layers.GRU(128, dropout=0.1)
+        self.summary_stats = keras.layers.Dense(64)
 
     def call(self, time_series, **kwargs):
         summary = self.gru(time_series, training=kwargs.get("stage") == "training")
