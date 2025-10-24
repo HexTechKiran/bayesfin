@@ -17,8 +17,8 @@ import pandas as pd
 import keras
 import bayesflow as bf
 import os
-import corner
 import jax
+
 
 RNG = np.random.default_rng(int(os.times()[4]))
 DRIFT_SCALE = 0.4
@@ -90,9 +90,9 @@ if __name__ == "__main__":
         .log(["inference_variables", "summary_variables"], p1=True)
     )
 
-    summary_net = GRU()
+    summary_net = bf.networks.TimeSeriesNetwork(dropout=0.1)
 
-    inference_net = bf.networks.CouplingFlow()
+    inference_net = bf.networks.CouplingFlow(transform="spline", depth=2, dropout=0.1)
 
     workflow = bf.BasicWorkflow(
         simulator=simulator,
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     history = workflow.fit_offline(data=train,
                                    epochs=100,
-                                   batch_size=64,
+                                   batch_size=32,
                                    validation_data=validation)
 
     f = bf.diagnostics.plots.loss(history)
@@ -118,11 +118,14 @@ if __name__ == "__main__":
     num_samples = 1000
 
     # Simulate 300 scenarios
+    print("Running simulations")
     test_sims = workflow.simulate(num_datasets)
 
     # Obtain num_samples posterior samples per scenario
+    print("Sampling")
     samples = workflow.sample(conditions=test_sims, num_samples=num_samples)
 
+    print("Making plots")
     f = bf.diagnostics.plots.recovery(samples, test_sims)
 
     b1_truth = test_sims["b1"][0].item()
@@ -160,4 +163,3 @@ if __name__ == "__main__":
     plt.show()
 
     plt.show()
-
