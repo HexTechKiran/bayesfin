@@ -19,17 +19,13 @@ import bayesflow as bf
 import jax
 
 RNG = np.random.default_rng(int(os.times()[4]))
+CORR_SCALE = 1
 
 # Priors for correlation parameters, drawn in unconstrained space
 def prior():
-    # latent variables z -> rho = tanh(z)
-    z12 = RNG.normal(loc=0.0, scale=1.0)
-    z13 = RNG.normal(loc=0.0, scale=1.0)
-    z23 = RNG.normal(loc=0.0, scale=1.0)
-
-    rho12 = np.tanh(z12)
-    rho13 = np.tanh(z13)
-    rho23 = np.tanh(z23)
+    rho12 = RNG.uniform(-CORR_SCALE, CORR_SCALE)
+    rho13 = RNG.uniform(-CORR_SCALE, CORR_SCALE)
+    rho23 = RNG.uniform(-CORR_SCALE, CORR_SCALE)
 
     return {"rho12": rho12, "rho13": rho13, "rho23": rho23}
 
