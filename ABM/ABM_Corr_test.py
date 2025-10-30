@@ -78,7 +78,7 @@ class GRU(bf.networks.SummaryNetwork):
 
 if __name__ == "__main__":
 
-    simulator = bf.simulators.make_simulator([prior, GBM_sim])
+    simulator = bf.simulators.make_simulator([prior, ABM_sim])
 
     adapter = (
         bf.adapters.Adapter()
