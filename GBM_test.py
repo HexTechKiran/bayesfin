@@ -14,13 +14,14 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import keras
 import bayesflow as bf
+import keras
 import os
 import jax
 
-
-RNG = np.random.default_rng(int(os.times()[4]))
+SEED = int(os.times()[4])
+#SEED = 12345
+RNG = np.random.default_rng(SEED)
 DRIFT_SCALE = 0.4
 
 def prior():
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     plt.plot(np.arange(0, time_, time_step_), [row[0] for row in motion])
     plt.plot(np.arange(0, time_, time_step_), [row[1] for row in motion])
     plt.plot(np.arange(0, time_, time_step_), [row[2] for row in motion])
-    plt.show()
+    plt.savefig("GBM_paths.png")
     """
 
     simulator = bf.simulators.make_simulator([prior, GBM_sim])
@@ -87,10 +88,11 @@ if __name__ == "__main__":
         .as_time_series("motion")
         .concatenate(["b1", "b2", "b3"], into="inference_variables")
         .rename("motion", "summary_variables")
-        .log(["inference_variables", "summary_variables"], p1=True)
+        #.log(["summary_variables"], p1=True)
     )
 
-    summary_net = bf.networks.TimeSeriesNetwork(dropout=0.1)
+    summary_net = bf.networks.TimeSeriesTransformer(dropout=0.1)
+    #summary_net = GRU(dropout=0.1)
 
     inference_net = bf.networks.CouplingFlow(transform="spline", depth=2, dropout=0.1)
 
@@ -98,8 +100,8 @@ if __name__ == "__main__":
         simulator=simulator,
         adapter=adapter,
         summary_network=summary_net,
-        inference_network=inference_net,
-        standardize=None
+        inference_network=inference_net
+        #standardize=None
     )
 
     train = workflow.simulate(8000)
@@ -112,7 +114,7 @@ if __name__ == "__main__":
 
     f = bf.diagnostics.plots.loss(history)
 
-    plt.show()
+    plt.savefig("GBM_drift_loss.png")
 
     num_datasets = 300
     num_samples = 1000
@@ -127,6 +129,8 @@ if __name__ == "__main__":
 
     print("Making plots")
     f = bf.diagnostics.plots.recovery(samples, test_sims)
+
+    plt.savefig("GBM_drift_recoveries.png")
 
     b1_truth = test_sims["b1"][0].item()
     b2_truth = test_sims["b2"][0].item()
@@ -160,6 +164,5 @@ if __name__ == "__main__":
                 ax.axis("off")
 
     plt.tight_layout()
-    plt.show()
 
-    plt.show()
+    plt.savefig("GBM_drift_hist.png")
