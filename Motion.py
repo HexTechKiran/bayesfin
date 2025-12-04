@@ -22,7 +22,7 @@ import jax
 
 
 class Motion:
-    def __init__(self, simulator : str, parameters : str,
+    def __init__(self, simulator : str, parameters : str, with_prior : bool = True,
                  seed : int = int(os.times()[4]),
                  time : float = 100 / 365, num_steps : int = 100,
                  x0 : list = [100, 100, 100],
@@ -48,6 +48,7 @@ class Motion:
 
         self.simulator = simulator.lower()
         self.parameters = parameters.lower()
+        self.with_prior = with_prior
         self.RNG = np.random.default_rng(seed)
         self.time = time
         self.num_steps = num_steps
@@ -180,10 +181,13 @@ class Motion:
 
         motion = sim(**drifts, **volatilities, **correlations)
 
-        return motion
+        if self.with_prior:
+            return motion | drifts | volatilities | correlations
+        else:
+            return motion
 
 if __name__ == "__main__":
-    days = 365
+    days = 100
     time = days/365
     steps = days
 
