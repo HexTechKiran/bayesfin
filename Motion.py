@@ -5,8 +5,6 @@ the motion, and then a specified level of freed parameters within the motion
 
 import os
 
-from torchgen.api.cpp import return_names
-
 if "KERAS_BACKEND" not in os.environ:
     # set this to "torch", "tensorflow", or "jax"
     os.environ["KERAS_BACKEND"] = "jax"
@@ -26,7 +24,7 @@ class Motion:
                  seed : int = int(os.times()[4]),
                  time : float = 100 / 365, num_steps : int = 100,
                  x0 : list = [100, 100, 100],
-                 drift_scale = 0.4,
+                 drift_scale = 1,
                  vol_mean = 0.24621856131518247, vol_stdev = 0.0049087692859631936 * 100,
                  corr_max = 1):
         """
@@ -61,7 +59,6 @@ class Motion:
     def __drift_prior(self):
         # Generates a random draw from the prior
         b1, b2, b3 = self.RNG.uniform(-self.drift_scale, self.drift_scale, size=3)
-        #b1, b2, b3 = 0.2, 0.4, -0.3
 
         return {"b1": b1, "b2": b2, "b3": b3}
 
@@ -101,7 +98,6 @@ class Motion:
         dt = self.time / self.num_steps
 
         stdevs = np.array([v1, v2, v3])
-        stdevs_D = np.diag(stdevs)
         correlation = np.array([[1.0, m21, m31],
                                 [m21, 1.0, m32],
                                 [m31, m32, 1.0]])
@@ -109,9 +105,9 @@ class Motion:
 
         L = np.linalg.cholesky(sigma)
 
-        x = self.x0
+        x = np.array(self.x0, dtype=float)
 
-        motion = [self.x0]
+        motion = [x.copy()]
 
         drift_coef = np.array([b1, b2, b3])
         correction = 0.5 * np.sum(L ** 2, axis=1)
@@ -131,7 +127,6 @@ class Motion:
         dt = self.time / self.num_steps
 
         stdevs = np.array([v1, v2, v3])
-        stdevs_D = np.diag(stdevs)
         correlation = np.array([[1.0, m21, m31],
                                 [m21, 1.0, m32],
                                 [m31, m32, 1.0]])
@@ -139,15 +134,14 @@ class Motion:
 
         L = np.linalg.cholesky(sigma)
 
-        x = self.x0
+        x = np.array(self.x0, dtype=float)
 
-        motion = [self.x0]
+        motion = [x.copy()]
 
         drift = np.array([b1, b2, b3]) * dt
-        correction = 0.5 * np.sum(L ** 2, axis=1)
 
         for _ in range(0, self.num_steps - 1):
-            random_shocks = L @ self.RNG.normal(scale=np.sqrt(dt), size=3) * np.sqrt(dt)
+            random_shocks = L @ self.RNG.normal(scale=np.sqrt(dt), size=3)
             dx = drift + random_shocks
             x = x + dx
             motion.append(x)
@@ -190,17 +184,18 @@ if __name__ == "__main__":
     days = 100
     time = days/365
     steps = days
+    num_sims = 1000
 
     ppc_sims = dict()
 
-    fc_simulator = Motion("geom", "fc", time=time, num_steps=steps)
-    ppc_sims["fc"] = [fc_simulator()["motion"] for _ in range(1000)]
+    fc_simulator = Motion("arith", "fc", time=time, num_steps=steps)
+    ppc_sims["fc"] = [fc_simulator()["motion"] for _ in range(num_sims)]
 
-    diag_simulator = Motion("geom", "diag", time=time, num_steps=steps)
-    ppc_sims["diag"] = [diag_simulator()["motion"] for _ in range(1000)]
+    diag_simulator = Motion("arith", "diag", time=time, num_steps=steps)
+    ppc_sims["diag"] = [diag_simulator()["motion"] for _ in range(num_sims)]
 
-    sph_simulator = Motion("geom", "sph", time=time, num_steps=steps)
-    ppc_sims["sph"] = [sph_simulator()["motion"] for _ in range(1000)]
+    sph_simulator = Motion("arith", "sph", time=time, num_steps=steps)
+    ppc_sims["sph"] = [sph_simulator()["motion"] for _ in range(num_sims)]
 
     dims = 3
     fig, axes = plt.subplots(dims, dims, figsize=(8, 8))

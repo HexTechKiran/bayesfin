@@ -1,6 +1,7 @@
 """
 Simulates a multivariable geometric brownian motion with 3 variables, and performs inference on
-the drift parameters, before outputting metrics for the posterior distributions.
+the volatility vector used as an input to create the volatility coefficient matrix.
+Outputs metrics on the posterior distributions generated.
 """
 
 
@@ -19,24 +20,28 @@ import keras
 import os
 import jax
 
-SEED = int(os.times()[4])
-#SEED = 12345
-RNG = np.random.default_rng(SEED)
-DRIFT_SCALE = 0.4
+RNG = np.random.default_rng(int(os.times()[4]))
+VOL_MEAN = 0.24621856131518247
+VOL_STDEV = 0.0049087692859631936 * 100 #100x stdev to avoid to small of a prior
 
 def prior():
     # Generates a random draw from the prior
 
-    b1 = RNG.uniform(-DRIFT_SCALE, DRIFT_SCALE)
-    b2 = RNG.uniform(-DRIFT_SCALE, DRIFT_SCALE)
-    b3 = RNG.uniform(-DRIFT_SCALE, DRIFT_SCALE)
+    v1 = RNG.lognormal(mean=VOL_MEAN, sigma=VOL_STDEV)
+    v2 = RNG.lognormal(mean=VOL_MEAN, sigma=VOL_STDEV)
+    v3 = RNG.lognormal(mean=VOL_MEAN, sigma=VOL_STDEV)
 
-    return {"b1":b1, "b2":b2, "b3":b3}
+    return {"v1":v1, "v2":v2, "v3":v3}
 
-def GBM_sim(b1, b2, b3, x0 = np.array([100, 100, 100]), time = 100/365, time_step = 1/365):
-    sigma = np.array([[0.5, 0.1, 0.0],
-                      [0.0, 0.1, 0.3],
-                      [0.0, 0.0, 0.2]])
+def GBM_sim(v1, v2, v3, x0 = np.array([100, 100, 100]), time = 100/365, time_step = 1/365):
+    stdevs = np.array([v1, v2, v3])
+    stdevs_D = np.diag(stdevs)
+    correlation = np.array([[1.0, 0.06201737, 0.0],
+                            [0.06201737, 1.0, 0.94868330],
+                            [0.0, 0.94868330, 1.0]])
+    sigma = correlation * np.outer(stdevs, stdevs)
+
+    b1, b2, b3 = 0.2, 0.4, -0.3
 
     x = x0
 
@@ -59,8 +64,8 @@ class GRU(bf.networks.SummaryNetwork):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.gru = keras.layers.GRU(128, dropout=0.1)
-        self.summary_stats = keras.layers.Dense(64)
+        self.gru = keras.layers.GRU(64, dropout=0.1)
+        self.summary_stats = keras.layers.Dense(16)
 
     def call(self, time_series, **kwargs):
         summary = self.gru(time_series, training=kwargs.get("stage") == "training")
@@ -72,12 +77,12 @@ if __name__ == "__main__":
     prior_sample = prior()
     time_ = 100/365
     time_step_ = 1/365
-    motion = GBM_sim(prior_sample["b1"], prior_sample["b2"], prior_sample["b3"])["motion"]
+    motion = GBM_sim(prior_sample["v1"], prior_sample["v2"], prior_sample["v3"])["motion"]
 
     plt.plot(np.arange(0, time_, time_step_), [row[0] for row in motion])
     plt.plot(np.arange(0, time_, time_step_), [row[1] for row in motion])
     plt.plot(np.arange(0, time_, time_step_), [row[2] for row in motion])
-    plt.savefig("GBM_paths.png")
+    plt.show()
     """
 
     simulator = bf.simulators.make_simulator([prior, GBM_sim])
@@ -86,13 +91,13 @@ if __name__ == "__main__":
         bf.adapters.Adapter()
         .convert_dtype("float64", "float32")
         .as_time_series("motion")
-        .concatenate(["b1", "b2", "b3"], into="inference_variables")
+        .concatenate(["v1", "v2", "v3"], into="inference_variables")
         .rename("motion", "summary_variables")
         #.log(["summary_variables"], p1=True)
     )
 
-    summary_net = bf.networks.TimeSeriesTransformer(dropout=0.1)
-    #summary_net = GRU(dropout=0.1)
+    #summary_net = bf.networks.TimeSeriesTransformer(dropout=0.1)
+    summary_net = GRU(dropout=0.1)
 
     inference_net = bf.networks.CouplingFlow(transform="spline", depth=2, dropout=0.1)
 
@@ -114,35 +119,32 @@ if __name__ == "__main__":
 
     f = bf.diagnostics.plots.loss(history)
 
-    plt.savefig("GBM_drift_loss.png")
+    plt.savefig("GBM_Vol_test_loss.png")
 
     num_datasets = 300
     num_samples = 1000
 
     # Simulate 300 scenarios
-    print("Running simulations")
     test_sims = workflow.simulate(num_datasets)
 
     # Obtain num_samples posterior samples per scenario
-    print("Sampling")
     samples = workflow.sample(conditions=test_sims, num_samples=num_samples)
 
-    print("Making plots")
     f = bf.diagnostics.plots.recovery(samples, test_sims)
 
-    plt.savefig("GBM_drift_recoveries.png")
+    plt.savefig("GBM_Vol_test_recoveries.png")
 
-    b1_truth = test_sims["b1"][0].item()
-    b2_truth = test_sims["b2"][0].item()
-    b3_truth = test_sims["b3"][0].item()
+    b1_truth = test_sims["v1"][0].item()
+    b2_truth = test_sims["v2"][0].item()
+    b3_truth = test_sims["v3"][0].item()
     truths = np.asarray([b1_truth, b2_truth, b3_truth])
 
-    b1_samples = samples["b1"][0].flatten()
-    b2_samples = samples["b2"][0].flatten()
-    b3_samples = samples["b3"][0].flatten()
+    b1_samples = samples["v1"][0].flatten()
+    b2_samples = samples["v2"][0].flatten()
+    b3_samples = samples["v3"][0].flatten()
     out_samples = np.asarray([b1_samples, b2_samples, b3_samples]).T
 
-    labels = ["b1", "b2", "b3"]
+    labels = ["v1", "v2", "v3"]
 
     d = out_samples.shape[1]
     fig, axes = plt.subplots(d, d, figsize=(8, 8))
@@ -165,4 +167,5 @@ if __name__ == "__main__":
 
     plt.tight_layout()
 
-    plt.savefig("GBM_drift_hist.png")
+    plt.savefig("GBM_Vol_test_hist.png")
+

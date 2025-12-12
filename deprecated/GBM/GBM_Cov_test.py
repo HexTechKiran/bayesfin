@@ -14,16 +14,15 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import keras
 import bayesflow as bf
+import keras
 import os
-import corner
 import jax
 
 RNG = np.random.default_rng(int(os.times()[4]))
 
 VOL_MEAN = 0.24621856131518247
-VOL_STDEV = 0.0049087692859631936
+VOL_STDEV = 0.0049087692859631936 * 100
 
 # Prior over volatilities and Cholesky correlation params
 def prior():
@@ -110,18 +109,20 @@ if __name__ == "__main__":
         .as_time_series("motion")
         .concatenate(variables, into="inference_variables")
         .rename("motion", "summary_variables")
-        .log(["inference_variables", "summary_variables"], p1=True)
+        #.log(["inference_variables", "summary_variables"], p1=True)
     )
 
-    summary_net = bf.networks.TimeSeriesNetwork(dropout=0.1)
+    #summary_net = bf.networks.TimeSeriesNetwork(dropout=0.1)
+    summary_net = GRU(dropout=0.1)
+
     inference_net = bf.networks.CouplingFlow(transform="spline", depth=2, dropout=0.1)
 
     workflow = bf.BasicWorkflow(
         simulator=simulator,
         adapter=adapter,
         summary_network=summary_net,
-        inference_network=inference_net,
-        standardize=None
+        inference_network=inference_net
+        #standardize=None
     )
 
     train = workflow.simulate(8000)
@@ -135,7 +136,7 @@ if __name__ == "__main__":
     )
 
     f = bf.diagnostics.plots.loss(history)
-    plt.show()
+    plt.savefig("GBM_Cov_loss.png")
 
     num_datasets = 300
     num_samples = 1000
@@ -144,7 +145,7 @@ if __name__ == "__main__":
     samples = workflow.sample(conditions=test_sims, num_samples=num_samples)
 
     f = bf.diagnostics.plots.recovery(samples, test_sims)
-    plt.show()
+    plt.savefig("GBM_Cov_recoveries.png")
 
     # Example marginal vol posteriors for first simulation
     truths = np.array([test_sims["v1"][0].item(),
@@ -174,4 +175,4 @@ if __name__ == "__main__":
                 ax.axis("off")
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig("GBM_Cov_hist.png")

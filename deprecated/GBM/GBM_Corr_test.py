@@ -14,8 +14,8 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import keras
 import bayesflow as bf
+import keras
 import jax
 
 RNG = np.random.default_rng(int(os.times()[4]))
@@ -23,9 +23,9 @@ CORR_SCALE = 1
 
 # Priors for correlation parameters, drawn in unconstrained space
 def prior():
-    rho12 = RNG.uniform(-CORR_SCALE, CORR_SCALE)
-    rho13 = RNG.uniform(-CORR_SCALE, CORR_SCALE)
-    rho23 = RNG.uniform(-CORR_SCALE, CORR_SCALE)
+    rho12 = RNG.uniform(0, CORR_SCALE)
+    rho13 = RNG.uniform(0, CORR_SCALE)
+    rho23 = RNG.uniform(0, CORR_SCALE)
 
     return {"rho12": rho12, "rho13": rho13, "rho23": rho23}
 
@@ -80,10 +80,10 @@ if __name__ == "__main__":
         .as_time_series("motion")
         .concatenate(["rho12","rho13","rho23"], into="inference_variables")
         .rename("motion", "summary_variables")
-        .log(["inference_variables","summary_variables"], p1=True)
+        .log(["summary_variables"], p1=True)
     )
 
-    summary_net = bf.networks.TimeSeriesNetwork(dropout=0.1)
+    summary_net = bf.networks.TimeSeriesTransformer(dropout=0.1)
     inference_net = bf.networks.CouplingFlow(transform="spline", depth=2, dropout=0.1)
 
     workflow = bf.BasicWorkflow(
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     )
 
     bf.diagnostics.plots.loss(history)
-    plt.show()
+    plt.savefig("GBM_Corr_loss.png")
 
     num_datasets = 300
     num_samples = 1000
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     samples = workflow.sample(conditions=tests, num_samples=num_samples)
 
     f = bf.diagnostics.plots.recovery(samples, tests)
-    plt.show()
+    plt.savefig("GBM_Corr_recovery.png")
 
     # corner-style plot
     r12_true = tests["rho12"][0].item()
@@ -141,4 +141,4 @@ if __name__ == "__main__":
                 ax.axis("off")
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig("GBM_Corr_corner.png")
